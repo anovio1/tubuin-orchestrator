@@ -1,0 +1,14 @@
+{
+    "terminal.integrated.profiles.windows": {
+        "PowerShell (Bypass & Venv)": {
+            "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "args": [
+                "-NoExit",
+                "-NoProfile",
+                "-Command",
+                "Set-ExecutionPolicy -Scope Process Bypass; . .venv\\Scripts\\Activate.ps1"
+            ]
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell (Bypass & Venv)"
+}

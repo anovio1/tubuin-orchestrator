@@ -1,0 +1,14 @@
+version: "3.7"
+services:
+  prefect:
+    image: prefecthq/prefect:3-latest
+    environment:
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:///prefect.db
+    volumes:
+      - prefect-db:/root/.prefect
+    ports:
+      - "4200:4200"
+    command: prefect server start --host 0.0.0.0
+
+volumes:
+  prefect-db:
