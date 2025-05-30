@@ -2,7 +2,13 @@
 ## create a visual flow /DAG
 cd folder
 prefect deploy
-prefect worker start # pool will be created after the previous, get the name of it
+# Open another terminal, poolname is set for deploy
+prefect worker start --pool "#Poolname#"
+
+# Cancel all late runs
+cd {projectfolder}
+python3 utils/cancel_all_late_runs.py
+
 
 # New project?
 ## create a visual flow /DAG
