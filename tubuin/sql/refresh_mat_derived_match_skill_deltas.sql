@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW CONCURRENTLY derived.match_skill_deltas;

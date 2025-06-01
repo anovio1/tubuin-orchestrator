@@ -1,0 +1,87 @@
+WITH source AS (
+	SELECT
+	    user_id,
+	    replay_id,
+	    name,
+	    player_id,
+	    ally_team_id,
+	    skill,
+	    rank,
+	    country_code,
+	    faction,
+	    won
+	FROM (
+	    SELECT
+	        NULLIF(player ->> 'userId', '')::int AS user_id,
+	        r.replay_id AS replay_id,
+	        r.start_time AS start_time,
+	        player ->> 'name' AS name,
+	        NULLIF(player ->> 'playerId', '')::int AS player_id,
+	        NULLIF(team ->> 'allyTeamId', '')::int AS ally_team_id,
+	        NULLIF(regexp_replace(player ->> 'skill', '[\[\]#~()\s]+', '', 'g'), '')::real AS skill,
+	        NULLIF(player ->> 'rank', '')::int AS rank,
+	        player ->> 'countryCode' AS country_code,
+	        player ->> 'faction' AS faction,
+	        (team ->> 'winningTeam')::boolean AS won
+	    FROM (
+		    WITH uniq_small AS (
+			  SELECT DISTINCT ON (replay_id)
+			    rrc.replay_id,
+			    rrc.start_time,
+			    rrc.raw_jsonb
+			  FROM raw.replays_cache rrc
+			  ORDER BY
+			    replay_id,
+			    start_time ASC    -- keep the latest per replay_id
+			)
+			-- 2) Full-join to get all large rows + any small-only rows:
+			SELECT
+			  COALESCE(l.replay_id, u.replay_id) AS replay_id,
+			  COALESCE(l.start_time, u.start_time) as start_time,
+			  coalesce(l.raw_jsonb, u.raw_jsonb) as raw_jsonb
+			FROM raw.replays AS l
+			FULL JOIN uniq_small AS u
+			  ON l.replay_id = u.replay_id
+			order by start_time desc
+	    ) as r
+	    JOIN LATERAL jsonb_array_elements(r.raw_jsonb -> 'AllyTeams') AS team(team) ON true
+	    JOIN LATERAL jsonb_array_elements(team -> 'Players') AS player(player) ON true
+	    WHERE start_time between %(timestamptz_from)s::timestamptz and %(timestamptz_to)s::timestamptz
+	    and r.raw_jsonb -> 'AllyTeams' IS NOT null
+	    ) as sub 
+		where NOT EXISTS (
+		  SELECT 1
+		  FROM derived.mputest b
+		  WHERE b.user_id = sub.user_id
+		    AND b.replay_id = sub.replay_id
+		)
+		order by start_time
+	),
+	first_insert as (
+	-- 1) insert all the real users (uses mpu_rup_unotnull)
+	INSERT INTO derived.mputest (
+	  user_id, replay_id, name, player_id,
+	  ally_team_id, skill, rank,
+	  country_code, faction, won
+	)
+	SELECT
+	  user_id, replay_id, name, player_id,
+	  ally_team_id, skill, rank,
+	  country_code, faction, won
+	FROM source
+	WHERE user_id IS NOT NULL
+	ON CONFLICT (replay_id, user_id, player_id) where (user_id is not null) DO NOTHING
+	)
+-- 1) insert all the null users (uses mpu_rp_uisnull)
+INSERT INTO derived.mputest (
+  user_id, replay_id, name, player_id,
+  ally_team_id, skill, rank,
+  country_code, faction, won
+)
+SELECT
+  user_id, replay_id, name, player_id,
+  ally_team_id, skill, rank,
+  country_code, faction, won
+FROM source
+WHERE user_id IS NULL
+ON CONFLICT (replay_id, player_id) where (user_id is null) DO NOTHING;

@@ -1,4 +1,4 @@
-#DB_CONN.py
+# tubuin\config\db_conn_info.py
 import os
 from dotenv import load_dotenv
 load_dotenv()
