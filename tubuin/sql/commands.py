@@ -27,3 +27,8 @@ class RefreshMaterialSkillDeltas(SQLCommand):
     label = "Refresh Materialized View: Match Skill Deltas"
     commit = False
     query = refresh_mat_derived_match_skill_deltas
+
+class UpdateAnalyticsPlayerPageJson(SQLCommand):
+    label = "Update Analytics Player Page JSON"
+    commit = False
+    query = update_analytics_player_page_json

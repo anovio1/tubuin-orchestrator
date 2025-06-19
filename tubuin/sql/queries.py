@@ -9,3 +9,4 @@ update_derived_replays = __getattr__("update_derived_replays")
 # Stats Generation
 update_analytics_match_skill_snapshots = __getattr__("update_analytics_match_skill_snapshots")
 refresh_mat_derived_match_skill_deltas = __getattr__("refresh_mat_derived_match_skill_deltas")
+update_analytics_player_page_json = __getattr__("update_analytics_player_page_json")

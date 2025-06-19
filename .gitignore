@@ -21,3 +21,5 @@ flows/__pycache__/
 *.log
 *.tmp
 *.bak
+
+tubuin/output_artifacts/**
