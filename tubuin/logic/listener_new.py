@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Generic, TypeVar, List, Optional, Set, Tuple
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -30,6 +30,7 @@ from urllib.parse import quote
 try:
     from prefect import get_run_logger
 except ImportError:
+
     class SuppressConsoleInfoFilter(logging.Filter):
         def filter(self, record):
             if record.levelno == logging.INFO and "Downloaded" in record.getMessage():
@@ -56,6 +57,7 @@ except ImportError:
 
         return logger
 
+
 @dataclass
 class Config:
     download_folder: Path
@@ -65,7 +67,7 @@ class Config:
     listen_interval: int
     results_per_page_limit: int
     listen_max_empty_pages: int
-    logger: logging.Logger
+    logger: logging.Logger | logging.LoggerAdapter
     skip_download: bool = False
     force_meta: bool = False
     downloaded_jsonl: str = "downloaded.jsonl"
@@ -75,11 +77,12 @@ class Config:
     base_download_url: str = (
         "https://storage.uk.cloud.ovh.net/v1/AUTH_10286efc0d334efd917d476d7183232e/BAR/demos"
     )
-    sandbox: bool = False,
+    sandbox: bool = False
 
     @property
     def listen_endpoint(self) -> str:
         return f"{self.base_api}/replays"
+
 
 @dataclass
 class Summary:
@@ -88,6 +91,7 @@ class Summary:
     ok: int
     fail: int
     elapsed: float
+
 
 class Summarizer:
     def __init__(self, config, width: int = 100):
@@ -123,7 +127,9 @@ def cancel_futures_on_interrupt(func):
             # user feedback & exit
             self.logger.info(f"{self.__class__.__name__} interrupted by user.")
             sys.exit(1)
+
     return wrapper
+
 
 def setup_logger(cfg) -> logging.Logger:
     logger = logging.getLogger("listener")
@@ -131,13 +137,14 @@ def setup_logger(cfg) -> logging.Logger:
     if not logger.handlers:
         fmt = "%(asctime)s [%(levelname)s] %(message)s"
         datefmt = "%Y-%m-%d %H:%M:%S"
-        fh = logging.FileHandler(f"listener_new{cfg.sandbox}.log", encoding = "utf-8")
+        fh = logging.FileHandler(f"listener_new{cfg.sandbox}.log", encoding="utf-8")
         fh.setFormatter(logging.Formatter(fmt, datefmt))
         logger.addHandler(fh)
         ch = logging.StreamHandler()
         ch.setFormatter(logging.Formatter(fmt, datefmt))
         logger.addHandler(ch)
     return logger
+
 
 class ReplayDownloader(ABC):
     @abstractmethod
@@ -160,6 +167,7 @@ class MetadataFetcher(ABC):
 
 
 # --- Utilities ---
+
 
 def countdown_sleep(seconds: int, message: str = "Waiting to check") -> None:
     ellipsis = itertools.cycle([".", "..", "..."])
@@ -189,12 +197,14 @@ def load_all_seen_ids(config: Config) -> Set[str]:
     """
 
     seen: Set[str] = set()
-    
+
     for subdir in config.download_folder.iterdir():
         if subdir.is_dir() and is_listener_folder(subdir.name):
             jsonl_file = subdir / config.downloaded_jsonl
-            if not jsonl_file.exists(): 
-                config.logger.error(f"load_all_seen_ids: jsonl_file does not exist for {subdir.name}")
+            if not jsonl_file.exists():
+                config.logger.error(
+                    f"load_all_seen_ids: jsonl_file does not exist for {subdir.name}"
+                )
                 continue
             for line in jsonl_file.read_text(encoding="utf-8").splitlines():
                 try:
@@ -205,9 +215,7 @@ def load_all_seen_ids(config: Config) -> Set[str]:
     return seen
 
 
-def append_to_downloaded_log(
-    config: Config, replay_id: str, folder: Path
-) -> None:
+def append_to_downloaded_log(config: Config, replay_id: str, folder: Path) -> None:
     log_file = folder / config.downloaded_jsonl
     try:
         with open(log_file, "a", encoding="utf-8") as f:
@@ -238,7 +246,9 @@ class HTTPReplayDownloader(ReplayDownloader):
                     f.write(chunk)
             return "ok", folder, filename
         except Exception as e:
-            self.config.logger.error(f"Download failed for {filename}: {e}", exc_info=True)
+            self.config.logger.error(
+                f"Download failed for {filename}: {e}", exc_info=True
+            )
             return "fail", folder, filename
         finally:
             if r is not None:
@@ -265,27 +275,29 @@ class HTTPMetadataFetcher(MetadataFetcher):
             return None, None
 
 
-class Command(ABC):
+T = TypeVar("T")
+
+
+class Command(Generic[T], ABC):
     @abstractmethod
-    def execute(self):
-        ...
+    def execute(self) -> T: ...
 
 
-class SearchReplaysCommand(Command):
+class SearchReplaysCommand(Command[List[dict]]):
     def __init__(self, config: Config, page: int, session: requests.Session):
         self.config = config
         self.page = page
         self.session = session
-    
+
     def execute(self) -> List[dict]:
         try:
             params = {
-                    "page": self.page,
-                    "limit": self.config.results_per_page_limit,
-                    "hasBots": "false",
-                    "endedNormally": "true",
-                    "date": [self.config.from_date, self.config.to_date],
-                }
+                "page": self.page,
+                "limit": self.config.results_per_page_limit,
+                "hasBots": "false",
+                "endedNormally": "true",
+                "date": [self.config.from_date, self.config.to_date],
+            }
             self.config.logger.debug(params)
             r = self.session.get(
                 self.config.listen_endpoint,
@@ -325,7 +337,7 @@ class FilterNewReplaysCommand(Command):
         return new, skipped
 
 
-class ParallelFetchMetadataCommand(Command):
+class ParallelFetchMetadataCommand(Command[List[Tuple[str, str, str]]]):
     def __init__(
         self,
         replays: List[dict],
@@ -338,16 +350,24 @@ class ParallelFetchMetadataCommand(Command):
 
         self.executor = None
         self.futures = {}
-    
+
     @cancel_futures_on_interrupt
     def execute(self) -> List[Tuple[str, str, str]]:
         results: List[Tuple[str, str, str]] = []
         with ThreadPoolExecutor(max_workers=self.config.pool_maxsize) as exec:
             self.executor = exec
-            self.futures = {exec.submit(self.fetcher.fetch, r["id"]): r for r in self.replays}
-            for fut in tqdm(as_completed(self.futures), total=len(self.futures), desc="Fetching metadata", ncols=80):
+            self.futures = {
+                exec.submit(self.fetcher.fetch, r["id"]): r for r in self.replays
+            }
+            for fut in tqdm(
+                as_completed(self.futures),
+                total=len(self.futures),
+                desc="Fetching metadata",
+                ncols=80,
+            ):
                 r = self.futures[fut]
                 rid = r.get("id")
+                assert(isinstance(rid, str))
                 try:
                     fname, meta = fut.result()
                 except Exception as e:
@@ -388,7 +408,12 @@ class ParallelDownloadCommand(Command):
                 exec.submit(self.downloader.download, fn, st): (rid, fn)
                 for rid, fn, st in self.downloads
             }
-            for fut in tqdm(as_completed(self.futures), total=len(self.futures), desc="Downloading files", ncols=80):
+            for fut in tqdm(
+                as_completed(self.futures),
+                total=len(self.futures),
+                desc="Downloading files",
+                ncols=80,
+            ):
                 rid, fn = self.futures[fut]
                 try:
                     status, folder, _ = fut.result()
@@ -400,7 +425,6 @@ class ParallelDownloadCommand(Command):
                 if status in ("ok", "exists"):
                     append_to_downloaded_log(self.config, rid, folder)
         return counts
-
 
 
 def scrape_replays(
@@ -417,7 +441,7 @@ def scrape_replays(
     seen_ids = load_all_seen_ids(config)
     page = 0
     empty = 0
-    
+
     try:
         while run_endless or empty < config.listen_max_empty_pages:
             try:
@@ -427,50 +451,60 @@ def scrape_replays(
                 raw = SearchReplaysCommand(config, page, session).execute()
                 if not raw:
                     empty += 1
-                    logger.info(f"Page {page} Empty response ({empty}/{config.listen_max_empty_pages})")
+                    logger.info(
+                        f"Page {page} Empty response ({empty}/{config.listen_max_empty_pages})"
+                    )
                     countdown_sleep(config.listen_interval)
                     continue
 
                 # 2) Filter
-                new_replays, skipped = FilterNewReplaysCommand(raw, seen_ids, config.force_meta).execute()
+                new_replays, skipped = FilterNewReplaysCommand(
+                    raw, seen_ids, config.force_meta
+                ).execute()
                 if not new_replays:
                     empty += 1
-                    logger.info(f"Page {page} No new replays found ({empty}/{config.listen_max_empty_pages})")
+                    logger.info(
+                        f"Page {page} No new replays found ({empty}/{config.listen_max_empty_pages})"
+                    )
                     countdown_sleep(config.listen_interval)
                     continue
 
                 firstDate = new_replays[0]["startTime"][:10]
                 lastDate = new_replays[-1]["startTime"][:10]
                 empty = 0
-                logger.info(f"Found {len(new_replays)} new replay(s) Skipped Seen: {skipped} {firstDate} - {lastDate}")
+                logger.info(
+                    f"Found {len(new_replays)} new replay(s) Skipped Seen: {skipped} {firstDate} - {lastDate}"
+                )
 
                 # 3) Fetch All Metadata
                 fetch_start = time.perf_counter()
-                metas = ParallelFetchMetadataCommand(new_replays, fetcher, config).execute()
+                metas = ParallelFetchMetadataCommand(
+                    new_replays, fetcher, config
+                ).execute()
                 fetch_elapsed = time.perf_counter() - fetch_start
 
-                total_to_fetch = len(new_replays)           # items you tried
+                total_to_fetch = len(new_replays)  # items you tried
                 ok = len(metas)
                 fail = total_to_fetch - ok
                 summarizer.report(
                     Summary("Metadata", total_to_fetch, ok, fail, fetch_elapsed)
                 )
 
-
-
                 # 4) Download All
                 if not config.skip_download:
                     dl_start = time.perf_counter()
-                    dl_counts = ParallelDownloadCommand(metas, downloader, config).execute()
+                    dl_counts = ParallelDownloadCommand(
+                        metas, downloader, config
+                    ).execute()
                     dl_elapsed = time.perf_counter() - dl_start
 
                     summarizer.report(
                         Summary(
-                        "Download",
-                        dl_counts["ok"] + dl_counts["fail"] + dl_counts["exists"],
-                        dl_counts["ok"] + dl_counts["exists"],
-                        dl_counts["fail"],
-                        dl_elapsed
+                            "Download",
+                            dl_counts["ok"] + dl_counts["fail"] + dl_counts["exists"],
+                            dl_counts["ok"] + dl_counts["exists"],
+                            dl_counts["fail"],
+                            dl_elapsed,
                         )
                     )
 
@@ -486,7 +520,7 @@ def scrape_replays(
             except Exception as e:
                 logger.error("Unhandled error in scrape_replays loop", exc_info=True)
                 countdown_sleep(config.listen_interval)
-    
+
     except Exception as e:
         logger.error(f"[scrape_replays] Error in while loop: {e}")
 
@@ -497,17 +531,32 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Listen for new BAR replays.")
     p.add_argument("--download-folder", type=Path, default="Replays")
     p.add_argument("--metas-folder", type=Path, default="metas")
-    p.add_argument("--from-date", type=str, default=(datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d"))
-    p.add_argument("--to-date", type=str, default=(datetime.today() + timedelta(days=2)).strftime("%Y-%m-%d"))
-    p.add_argument("--listen-interval", type=int, default = 1)
-    p.add_argument("--results-per-page-limit", type=int, default = 500)
-    p.add_argument("--listen-max-empty-pages", type=int, default = 5)
+    p.add_argument(
+        "--from-date",
+        type=str,
+        default=(datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d"),
+    )
+    p.add_argument(
+        "--to-date",
+        type=str,
+        default=(datetime.today() + timedelta(days=2)).strftime("%Y-%m-%d"),
+    )
+    p.add_argument("--listen-interval", type=int, default=1)
+    p.add_argument("--results-per-page-limit", type=int, default=500)
+    p.add_argument("--listen-max-empty-pages", type=int, default=5)
     p.add_argument("--skip-download", action="store_true")
     p.add_argument("--force-meta", action="store_true")
-    p.add_argument("--listen", action="store_true", help="Run endlessly ignoring max-empty-pages limit")
-    p.add_argument("--sandbox", action="store_true", help="Run using real downloads/network, but write to safe folders")
+    p.add_argument(
+        "--listen",
+        action="store_true",
+        help="Run endlessly ignoring max-empty-pages limit",
+    )
+    p.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="Run using real downloads/network, but write to safe folders",
+    )
     args = p.parse_args()
-
 
     cfg = Config(
         download_folder=args.download_folder,
@@ -520,13 +569,19 @@ if __name__ == "__main__":
         skip_download=args.skip_download,
         force_meta=args.force_meta,
         sandbox=args.sandbox,
-        logger=get_run_logger()
+        logger=get_run_logger(),
     )
 
     if args.sandbox:
-        cfg.download_folder = args.download_folder.parent / f"{args.download_folder.name}_staging"
-        cfg.metas_folder = args.metas_folder.parent / f"{args.metas_folder.name}_staging"
-        cfg.logger.info(f"[SANDBOX MODE] Writing to: - DL: {cfg.download_folder} - M: {cfg.metas_folder}")
+        cfg.download_folder = (
+            args.download_folder.parent / f"{args.download_folder.name}_staging"
+        )
+        cfg.metas_folder = (
+            args.metas_folder.parent / f"{args.metas_folder.name}_staging"
+        )
+        cfg.logger.info(
+            f"[SANDBOX MODE] Writing to: - DL: {cfg.download_folder} - M: {cfg.metas_folder}"
+        )
 
     cfg.download_folder.mkdir(parents=True, exist_ok=True)
     cfg.metas_folder.mkdir(parents=True, exist_ok=True)

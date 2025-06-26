@@ -1,18 +1,8 @@
 from abc import ABC, abstractmethod
+from typing import LiteralString
 
 class SQLCommand(ABC):
-    @property
-    @abstractmethod
-    def label(self) -> str: ...
-
-    @property
-    def commit(self) -> bool:
-        return True
-    
-    @property
-    def params(self) -> dict:
-        {}
-    
-    @property
-    @abstractmethod
-    def query(self) -> str: ...
+    label: str
+    query: str
+    commit: bool = True
+    params: dict = {}

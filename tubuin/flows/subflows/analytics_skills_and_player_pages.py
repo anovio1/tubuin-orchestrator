@@ -40,8 +40,6 @@ def update_analytics_match_skill_snapshots() -> int:
                 )
     except Exception as e:
         logger.error(f"❌ Error during match_skill_snapshots update: {e}")
-        conn.rollback()
-        conn.close()
         raise
     finally:
         logger.info(f"ℹ️ Total rows affected: {affected_rows}")
@@ -67,7 +65,6 @@ def update_match_skill_deltas():
                 logger.info(f"✅ Refreshed match_skill_deltas.")
     except Exception as e:
         logger.error(f"❌ Error during match_skill_deltas refresh: {e}")
-        conn.rollback()
         raise
     finally:
         logger.info(f"ℹ️ Total rows affected:")
@@ -161,8 +158,8 @@ def main_flow():
 
     # Step 2: update derived.match_skill_deltas
     logger.info("▶️ Step 2: Update derived.match_skill_deltas")
-    mat_skill_deltas_future = update_match_skill_deltas.submit(
-        wait_for=[snapshots_future]  # This dependency is explicit and correct.
+    mat_skill_deltas_future = update_match_skill_deltas.submit(  # type: ignore[arg-type]
+        wait_for=[snapshots_future]
     )
 
     # A future improvement is to make this more flexible. We could pass in a short
