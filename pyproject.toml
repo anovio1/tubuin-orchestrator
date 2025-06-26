@@ -1,0 +1,24 @@
+[project]
+name = "tubuin-orchestrator"
+version = "0.1.0"
+description = "Data pipeline for Tubuin project, powered by prefect"
+authors = [
+    {name = "anovio1"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "prefect (>=3.4.3,<4.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "psycopg[binary] (>=3.2.9,<4.0.0)",
+    "paramiko (>=3.5.1,<4.0.0)",
+    "msgpack (>=1.1.1,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "tubuin"}]
