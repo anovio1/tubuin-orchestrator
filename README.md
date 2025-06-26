@@ -1,60 +1,23 @@
-# Have a project?
-## create a visual flow /DAG
-cd folder
-prefect deploy
-# Open another terminal, poolname is set for deploy
-prefect worker start --pool "#Poolname#"
+# Tubuin Orchestrator
 
-# Cancel all late runs
-cd {projectfolder}
-python3 utils/cancel_all_late_runs.py
+The data pipeline orchestration service for the Tubuin project, powered by Prefect.
 
+Its role is to source match replays and metadata, extract raw data through parsing, generate artifacts for consumers, and populate the data backend for the Tubuin analytical platform.
 
-# New project?
-## create a visual flow /DAG
-create a project folder
-cd folder
-prefect init
-create a py file with flow
-prefect deploy
+## Core Responsibilities
 
-# Commands
-##   Run the Local UI 
-open new powershell
-cd prefect-server
-Start Docker Desktop
-docker compose up
+- **Ingestion:** Processes `.mpk` (Messagepack) files from completed matches
+- **Transformation:** Runs `message_pack_processor` to create artifacts
+- **Deployment:** Uploads processed artifacts to a cloud object store (Cloudflare R2).
+- **Cataloging:** Notifies the `tubuin-api` of new, available match data.
 
-open another powershell
-prefect config set PREFECT_API_URL=http://localhost:4200/api
-prefect config view
+## Architecture
 
-Visit http://localhost:4200 to see a basic dashboard of flows, tasks, and runs.
+This system is built as a series of observable dataflows using the [Prefect](https://www.prefect.io/) orchestration framework.
 
-🔁 In another terminal tab, run:
-prefect dev agent
-This enables Prefect to schedule and trigger flows later (even locally).
+## Getting Started
 
+This project is designed to be run as a service. For developers looking to run the orchestration layer locally, please see the **[Local Setup Guide](./docs/LOCAL_SETUP.md)**.
 
-# Set up a project
-make directory
-make flow.py
-write etl flow
-
-# Installation
-## set up venv, activate
-python -m venv .venv
-.venv\Scripts\activate
-pip install --upgrade pip
-
-pip install prefect
-
-# or use requirements
-pip install -r requirements.txt -c requirements.lock.txt
-
-
-# Write out requirements (light), then clean it up so just your manually installed packages
-pip list --not-required --format=freeze > requirements.txt
-
-# Then lock, subdependencies
-pip freeze > requirements.lock
+---
+*This repository is part of the larger Tubuin Analytics ecosystem.*
