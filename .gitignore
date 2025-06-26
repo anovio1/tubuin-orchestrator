@@ -11,6 +11,9 @@ venv/
 .venv/
 !venv/.venv-used
 !.venv/.venv-used
+.winvenv/
+!.winvenv/.venv-used
+
 
 # Prefect artifacts
 *.orion

@@ -4,7 +4,9 @@ services:
     image: prefecthq/prefect:3-latest
     environment:
       - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:///prefect.db
+      - PYTHONPATH=/app/tubuin
     volumes:
+      - ./tubuin:/app/tubuin
       - prefect-db:/root/.prefect
     ports:
       - "4200:4200"
