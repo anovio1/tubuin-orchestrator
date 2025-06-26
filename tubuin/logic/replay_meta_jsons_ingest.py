@@ -1,4 +1,4 @@
-# pgsql_replaysCacheIngest.py
+# tubuin\logic\replay_meta_jsons_ingest.py
 # This script reads metas and pushes to pgsql, moves processed metas to a "processed" subdirectory.
 # TO DO: upon completion, batches to msgpack?
 
