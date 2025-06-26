@@ -26,3 +26,4 @@ flows/__pycache__/
 *.bak
 
 tubuin/output_artifacts/**
+.vscode/
